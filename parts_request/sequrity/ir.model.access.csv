@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_part_customer_approval_notification_user,access_part_customer_approval_notification_user,model_part_customer_approval_notification,base.group_user,1,1,1,1
+access_part_approval_notification,access_part_approval_notification,model_part_approval_notification,base.group_user,1,1,1,1
+
