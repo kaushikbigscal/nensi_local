@@ -1,0 +1,161 @@
+<odoo>
+
+    <menuitem id="fsm_management"
+              name="Managements"
+              sequence="30"
+              parent="industry_fsm.fsm_menu_root"
+              groups="industry_fsm.group_fsm_user,industry_fsm.group_fsm_supervisor,industry_fsm.group_fsm_manager"/>
+
+    <!-- Action -->
+    <record id="action_part_approval_notifications" model="ir.actions.act_window">
+        <field name="name">Parts Approval</field>
+        <field name="res_model">part.approval.notification</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No part approval requests available.
+            </p>
+        </field>
+    </record>
+
+    <!-- Tree View -->
+    <record id="view_part_approval_tree" model="ir.ui.view">
+        <field name="name">part.approval.notification.tree</field>
+        <field name="model">part.approval.notification</field>
+        <field name="arch" type="xml">
+            <tree create="False" sample="1" delete="false">
+                <field name="show_pick_up_button" column_invisible="1"/>
+                <field name="show_request_button" column_invisible="1"/>
+                <field name="sequence_fsm"/>
+                <field name="task_id"/>
+                <field name="user_ids" widget="many2many_avatar_user"/>
+                <field name="partner_id" widget="many2one_avatar_user"/>
+                <field name="product_id" widget="text"/>
+                <field name="part_name"/>
+                <field name="coverage" decoration-success="coverage == 'foc'"
+                       decoration-danger="coverage == 'chargeable'"/>
+                <field name="supervisor_id" widget="text"/>
+                <field name="status"/>
+                <button name="action_approve" string="Approve" type="object" class="btn-success"
+                        invisible="status != 'draft'"/>
+                <button name="action_request_warehouse_manager" string="Request" type="object" class="btn-primary"
+                        invisible="not show_request_button"/>
+                <button name="action_reject" string="Reject" type="object" class="btn-danger"
+                        invisible="status != 'draft'"/>
+                <button name="action_part_available"
+                        string="Part Available"
+                        type="object"
+                        class="btn-primary"
+                        invisible="status != 'waiting_warehouse_manager'"/>
+                <button name="action_pick_up"
+                        string="Pick Up"
+                        type="object"
+                        class="btn-primary"
+                        icon="fa-truck"
+                        invisible="not show_pick_up_button"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_part_approval_form" model="ir.ui.view">
+        <field name="name">part.approval.notification.form</field>
+        <field name="model">part.approval.notification</field>
+        <field name="arch" type="xml">
+            <form create="False">
+                <field name="show_pick_up_button" invisible="1"/>
+                <field name="show_request_button" invisible="1"/>
+                <header>
+                    <button name="action_approve" string="Approve" type="object" class="btn-success"
+                            invisible="status != 'draft'"/>
+                    <button name="action_request_warehouse_manager" string="Request" type="object" class="btn-primary"
+                            invisible="not show_request_button"/>
+                    <button name="action_reject" string="Reject" type="object" class="btn-danger"
+                            invisible="status != 'draft'"/>
+                    <button name="action_part_available"
+                            string="Part Available"
+                            type="object"
+                            class="btn-primary"
+                            invisible="status != 'waiting_warehouse_manager'"/>
+                    <button name="action_pick_up"
+                            string="Pick Up"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-truck"
+                            invisible="not show_pick_up_button"
+                    />
+                    <field name="status"
+                           widget="statusbar"
+                           statusbar_visible="draft,approved,waiting_warehouse_manager,shipment,pick_up,received,rejected"/>
+                </header>
+                <sheet>
+                    <field name="show_stock_button" invisible="1"/>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_redirect_stock" string="Stock" type="object" class="oe_stat_button"
+                                icon="fa-cubes" invisible="not show_stock_button"/>
+                    </div>
+                    <group>
+                        <field name="sequence_fsm"/>
+                        <field name="task_id"/>
+                        <field name="user_ids" widget="many2many_avatar_user"/>
+                        <field name="partner_id" widget="many2one_avatar_user"/>
+                        <field name="product_id" widget="text"/>
+                        <field name="part_name"/>
+                        <field name="coverage" decoration-success="coverage == 'foc'"
+                               decoration-danger="coverage == 'chargeable'"/>
+                        <field name="supervisor_id" widget="text"/>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" options="{'post_refresh':True}"
+                           groups="base.group_user"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_part_approval_search" model="ir.ui.view">
+        <field name="name">view.part.approval.search</field>
+        <field name="model">part.approval.notification</field>
+        <field name="arch" type="xml">
+            <search string="Part Approval Notifications">
+                <field name="sequence_fsm" string="Ticket Number"/>
+                <field name="task_id" string="Call Name"/>
+                <field name="product_id" string="Product"/>
+                <field name="part_name" string="Part Name"/>
+                <field name="supervisor_id" string="Supervisor"/>
+                <field name="coverage"/>
+                <field name="status"/>
+                <!-- Filters -->
+                <filter name="draft_filter" string="Draft" domain="[('status', '=', 'draft')]"/>
+                <filter name="approved_filter" string="Approved" domain="[('status', '=', 'approved')]"/>
+                <filter name="waiting_supervisor_filter" string="Waiting Supervisor Approval"
+                        domain="[('status', '=', 'waiting_supervisor')]"/>
+                <filter name="shipment_filter" string="Shipment" domain="[('status', '=', 'shipment')]"/>
+                <filter name="pick_up_filter" string="Pick Up" domain="[('status', '=', 'pick_up')]"/>
+                <filter name="rejected_filter" string="Rejected" domain="[('status', '=', 'rejected')]"/>
+                <filter name="received_filter" string="Received" domain="[('status', '=', 'received')]"/>
+                <separator/>
+                <!-- Group By Section -->
+                <group expand="0" string="Group By...">
+                    <filter name="group_by_supervisor" string="Supervisor" context="{'group_by': 'supervisor_id'}"/>
+                    <filter name="group_by_task" string="Calls" context="{'group_by': 'task_id'}"/>
+                    <filter name="group_by_product" string="Product" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_by_coverage" string="Coverage" context="{'group_by': 'coverage'}"/>
+                    <filter name="group_by_status" string="Status" context="{'group_by': 'status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <menuitem id="fsm_management_parts"
+              name="Parts"
+              parent="fsm_management"
+              action="action_part_approval_notifications"
+              sequence="1"
+              groups="industry_fsm.group_fsm_user,industry_fsm.group_fsm_supervisor,industry_fsm.group_fsm_manager"/>
+
+</odoo>
