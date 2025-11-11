@@ -1,0 +1,62 @@
+<odoo>
+    <record id="view_part_service_wizard_form_inherit" model="ir.ui.view">
+        <field name="name">view.part.service.wizard.form.inherit</field>
+        <field name="model">part.service.wizard</field>
+        <field name="inherit_id" ref="inventory_custom_tracking_installation_delivery.view_part_service_wizard_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form//group//field[@name='description']" position="after">
+                <field name="coverage"/>
+                <field name="amount" invisible="coverage != 'chargeable'"/>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_task_form_inherit_parts_list" model="ir.ui.view">
+        <field name="name">project.task.form.inherit.parts.list.coverage</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="project.view_task_form2"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='description']"
+                   position="after">
+                <field name="coverage"
+                       decoration-success="coverage == 'foc'"
+                       decoration-danger="coverage == 'chargeable'"/>
+                <field name="amount"/>
+                <field name="status" readonly="1"/>
+            </xpath>
+            <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='description']"
+                   position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='last_update_date_time']"
+                   position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='task_part_ids']//tree/button[@name='open_part_service_wizard']"
+                   position="attributes">
+                <attribute name="string">Update</attribute>
+            </xpath>
+            <xpath expr="//field[@name='task_part_ids']//tree/button[@name='open_part_service_wizard']"
+                   position="after">
+                <field name="approval_requested" column_invisible="True"/>
+                <field name="has_cancelled_quotation" column_invisible="True"/>
+                <button string="Request"
+                        type="object"
+                        name="action_parts_request"
+                        class="btn-success"
+                        invisible="approval_requested == True"/>
+                <button string="Create Quotation"
+                        type="object"
+                        name="action_create_quotation"
+                        class="btn-success"
+                        invisible="status != 'approved' or coverage != 'chargeable'"/>
+                <button string="View Quotation"
+                        type="object"
+                        name="action_open_canceled_quotation"
+                        class="btn-primary"
+                        invisible="status != 'rejected' or has_cancelled_quotation == False or coverage != 'chargeable'"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
