@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="custom_portal_parts_request_card" inherit_id="customer_app.custom_portal_layout_cards">
+        <xpath expr="//div[contains(@class, 'info-card-grid')]//a[@t-attf-href='/my/quotes']/.." position="before">
+            <t t-if="fsm_installed">
+                <!-- Parts Request Card -->
+                <a href="/my/parts/request" class="text-decoration-none">
+                    <div class="info-card">
+                        <div class="info-card-title">Parts Request</div>
+
+                        <!-- Count -->
+                        <div class="info-card-value">
+                            <t t-esc="parts_request_count or 0"/>
+                        </div>
+                        <div class="info-icon">
+                            <i class="bi bi-folder-symlink"></i>
+                        </div>
+
+                        <!-- Status -->
+                        <div t-attf-class="info-card-status #{'info-green' if parts_request_pending_count == 0 else 'info-red'}">
+                            <t t-if="parts_request_pending_count == 0">No Pending Requests</t>
+                            <t t-else="">
+                                <t t-esc="parts_request_pending_count or 0"/>
+                                Pending
+                            </t>
+                        </div>
+                    </div>
+                </a>
+            </t>
+        </xpath>
+    </template>
+    <!-- Parts Request List View Template -->
+    <template id="parts_request_list_view" name="Parts Request List">
+        <t t-call="portal.portal_layout">
+            <div class="container">
+                <t t-call="portal.portal_searchbar">
+                    <t t-set="title" t-value="'Parts Approval Requests'"/>
+                    <t t-set="searchbar_combined" t-value="searchbar_combined"/>
+                    <t t-set="searchbar_inputs" t-value="searchbar_inputs"/>
+                    <t t-set="searchbar_filters" t-value="filters"/>
+                    <t t-set="searchbar_groupby" t-value="searchbar_groupby"/>
+                    <t t-set="search_in" t-value="search_in"/>
+                    <t t-set="filterby" t-value="filterby"/>
+                    <t t-set="groupby" t-value="groupby"/>
+                    <t t-set="search" t-value="search"/>
+                    <t t-set="default_url" t-value="default_url"/>
+                </t>
+
+                <!-- Grouped View -->
+                <t t-if="grouped_requests">
+                    <div class="accordion" id="partsRequestAccordion">
+                        <t t-foreach="grouped_requests.items()" t-as="group">
+                            <t t-set="group_name" t-value="group[0]"/>
+                            <t t-set="group_requests" t-value="group[1]"/>
+                            <t t-set="group_id"
+                               t-value="'group-' + group_name.replace(' ', '_').replace('/', '_').replace('[', '_').replace(']', '_').replace(':', '_').replace(';', '_').replace(&quot;'&quot;, '_')"/>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" t-attf-id="heading-#{group_id}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                            t-attf-data-bs-target="#collapse-#{group_id}" aria-expanded="false"
+                                            t-attf-aria-controls="collapse-#{group_id}">
+                                        <t t-esc="group_name or 'Undefined Group'"/>
+                                    </button>
+                                </h2>
+
+                                <div t-attf-id="collapse-#{group_id}" class="accordion-collapse collapse"
+                                     t-attf-aria-labelledby="heading-#{group_id}"
+                                     data-bs-parent="#partsRequestAccordion">
+                                    <div class="accordion-body p-4">
+                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                            <table class="table table-hover mb-0 o_portal_my_doc_table">
+                                                <thead>
+                                                    <tr>
+                                                        <th class="sortable">Service Call
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="sortable">Product Name
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="sortable">Part Name
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="sortable">Engineer Name
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="sortable">Status
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="sortable" style="width: 100px; white-space: nowrap;">
+                                                            Amount
+                                                            <i class="fa fa-sort ms-1"></i>
+                                                        </th>
+                                                        <th class="text-center">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <t t-foreach="parts_requests" t-as="req">
+                                                        <tr>
+                                                            <!-- Service Call Name -->
+                                                            <td class="wrap-text">
+                                                                <a t-if="req.task_id"
+                                                                   t-attf-href="/my/ticket/#{req.task_id.id}">
+                                                                    <t t-esc="req.task_id.name or 'N/A'"/>
+                                                                </a>
+                                                            </td>
+
+                                                            <!-- Product Name -->
+                                                            <td class="wrap-text">
+                                                                <t t-esc="req.product_id.name or 'N/A'"/>
+                                                            </td>
+
+                                                            <!-- Part Name -->
+                                                            <td class="wrap-text">
+                                                                <t t-if="req.part_name or req.part_id.name">
+                                                                    <t t-esc="req.part_name or req.part_id.name"/>
+                                                                    <t t-if="req.part_id.part_service_type">
+                                                                        (<t t-esc="req.part_id.part_service_type"/>)
+                                                                    </t>
+                                                                </t>
+                                                                <t t-else="1">N/A</t>
+                                                            </td>
+
+                                                            <!-- Engineer/Supervisor Name -->
+                                                            <td class="wrap-text">
+                                                                <t t-esc="req.task_id.user_ids and req.task_id.user_ids[0].name or 'N/A'"/>
+                                                            </td>
+                                                            <!-- Status -->
+                                                            <td>
+                                                                <span t-attf-class="badge #{
+                                                                                    'bg-warning text-dark' if req.stage == 'pending' else
+                                                                                    'bg-success' if req.stage == 'approved' else
+                                                                                    'bg-danger' if req.stage == 'rejected' else
+                                                                                    'bg-secondary' }">
+                                                                    <t t-esc="req.stage.title() or 'N/A'"/>
+                                                                </span>
+                                                            </td>
+                                                            <!-- Amount Column - FIXED -->
+                                                            <td class="text-end"
+                                                                style="width: 100px; white-space: nowrap;">
+                                                                <t t-if="req.part_id and req.part_id.amount">
+                                                                    ₹
+                                                                    <t t-esc="'%0.2f' % req.part_id.amount"/>
+                                                                </t>
+                                                                <t t-else="">₹0.00</t>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <t t-if="req.stage == 'pending'">
+                                                                    <form method="post"
+                                                                          t-attf-action="/my/parts/request/{{req.id}}/approve"
+                                                                          class="d-inline me-1">
+                                                                        <input type="hidden" name="csrf_token"
+                                                                               t-att-value="request.csrf_token()"/>
+                                                                        <button type="submit"
+                                                                                class="btn btn-success btn-sm"
+                                                                                title="Approve">
+                                                                            Approve
+                                                                        </button>
+                                                                    </form>
+
+                                                                    <form method="post"
+                                                                          t-attf-action="/my/parts/request/{{req.id}}/reject"
+                                                                          class="d-inline">
+                                                                        <input type="hidden" name="csrf_token"
+                                                                               t-att-value="request.csrf_token()"/>
+                                                                        <button type="submit"
+                                                                                class="btn btn-danger btn-sm"
+                                                                                title="Reject">
+                                                                            Reject
+                                                                        </button>
+                                                                    </form>
+                                                                </t>
+
+                                                                <!-- Show Pay for Approved -->
+                                                                <t t-set="product_template" t-value="request.env['product.template'].sudo().search([
+                                                                        ('name', '=', req.part_name),
+                                                                        ('is_part', '=', True)
+                                                                    ], limit=1)"/>
+
+                                                                <!-- Show Pay button only if payment_required_first = False -->
+                                                                <t t-if="not product_template.payment_required_first and req.stage == 'approved' and not req.is_fully_paid">
+                                                                    <form method="post"
+                                                                          t-attf-action="/my/parts/request/{{req.id}}/pay"
+                                                                          class="d-inline">
+                                                                        <input type="hidden" name="csrf_token"
+                                                                               t-att-value="request.csrf_token()"/>
+                                                                        <button type="submit"
+                                                                                class="btn btn-primary btn-sm"
+                                                                                title="Pay">
+                                                                            Pay
+                                                                        </button>
+                                                                    </form>
+                                                                </t>
+                                                                <!-- Show Partial Pay Button -->
+                                                                <t t-if="req.stage == 'partially_paid'">
+                                                                    <form method="post"
+                                                                          t-attf-action="/my/parts/request/{{req.id}}/partial_pay"
+                                                                          class="d-inline">
+                                                                        <input type="hidden" name="csrf_token"
+                                                                               t-att-value="request.csrf_token()"/>
+                                                                        <button type="submit"
+                                                                                class="btn btn-warning btn-sm"
+                                                                                title="Pay Remaining">
+                                                                            Pay Remaining
+                                                                        </button>
+                                                                    </form>
+                                                                </t>
+                                                            </td>
+                                                        </tr>
+                                                    </t>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+                <!-- Flat Table View -->
+                <t t-elif="not groupby and parts_requests">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-hover o_portal_my_doc_table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable">Service Call
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="sortable">Product Name
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="sortable">Part Name
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="sortable">Engineer Name
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="sortable">Status
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="sortable" style="width: 100px; white-space: nowrap;">Amount
+                                        <i class="fa fa-sort ms-1"></i>
+                                    </th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="parts_requests" t-as="req">
+                                    <tr>
+                                        <!-- Service Call Name -->
+                                        <td class="wrap-text">
+                                            <a t-if="req.task_id"
+                                               t-attf-href="/my/ticket/#{req.task_id.id}">
+                                                <t t-esc="req.task_id.name or 'N/A'"/>
+                                            </a>
+                                        </td>
+
+                                        <!-- Product Name -->
+                                        <td class="wrap-text">
+                                            <t t-esc="req.product_id.name or 'N/A'"/>
+                                        </td>
+
+                                        <!-- Part Name -->
+                                        <td class="wrap-text">
+                                            <t t-if="req.part_name or req.part_id.name">
+                                                <t t-esc="req.part_name or req.part_id.name"/>
+                                                <t t-if="req.part_id.part_service_type">
+                                                    (<t t-esc="req.part_id.part_service_type"/>)
+                                                </t>
+                                            </t>
+                                            <t t-else="1">N/A</t>
+                                        </td>
+
+
+                                        <!-- Engineer/Supervisor Name -->
+                                        <td class="wrap-text">
+                                            <t t-esc="req.task_id.user_ids and req.task_id.user_ids[0].name or 'N/A'"/>
+                                        </td>
+                                        <!-- Status -->
+                                        <td>
+                                            <span t-attf-class="badge #{
+                                            'bg-warning text-dark' if req.stage == 'pending' else
+                                            'bg-success' if req.stage == 'approved' else
+                                            'bg-danger' if req.stage == 'rejected' else
+                                            'bg-secondary'
+                                        }">
+                                                <t t-esc="req.stage.title() or 'N/A'"/>
+                                            </span>
+                                        </td>
+                                        <!-- Amount Column - FIXED -->
+                                        <td class="text-end" style="width: 100px; white-space: nowrap;">
+                                            <t t-if="req.part_id and req.part_id.amount">
+                                                ₹
+                                                <t t-esc="'%0.2f' % req.part_id.amount"/>
+                                            </t>
+                                            <t t-else="">₹0.00</t>
+                                        </td>
+                                        <td class="text-center">
+                                            <t t-if="req.stage == 'pending'">
+                                                <form method="post"
+                                                      t-attf-action="/my/parts/request/{{req.id}}/approve"
+                                                      class="d-inline me-1">
+                                                    <input type="hidden" name="csrf_token"
+                                                           t-att-value="request.csrf_token()"/>
+                                                    <button type="submit"
+                                                            class="btn btn-success btn-sm"
+                                                            title="Approve">
+                                                        Approve
+                                                    </button>
+                                                </form>
+
+                                                <form method="post"
+                                                      t-attf-action="/my/parts/request/{{req.id}}/reject"
+                                                      class="d-inline">
+                                                    <input type="hidden" name="csrf_token"
+                                                           t-att-value="request.csrf_token()"/>
+                                                    <button type="submit"
+                                                            class="btn btn-danger btn-sm"
+                                                            title="Reject">
+                                                        Reject
+                                                    </button>
+                                                </form>
+                                            </t>
+
+                                            <!-- Show Pay for Approved -->
+                                            <t t-set="product_template" t-value="request.env['product.template'].sudo().search([
+                                                    ('name', '=', req.part_name),
+                                                    ('is_part', '=', True)
+                                                ], limit=1)"/>
+
+                                            <!-- Show Pay button only if payment_required_first = False -->
+                                            <t t-if="not product_template.payment_required_first and req.stage == 'approved' and not req.is_fully_paid">
+                                                <form method="post"
+                                                      t-attf-action="/my/parts/request/{{req.id}}/pay"
+                                                      class="d-inline">
+                                                    <input type="hidden" name="csrf_token"
+                                                           t-att-value="request.csrf_token()"/>
+                                                    <button type="submit"
+                                                            class="btn btn-primary btn-sm"
+                                                            title="Pay">
+                                                        Pay
+                                                    </button>
+                                                </form>
+                                            </t>
+                                            <!-- Show Partial Pay Button -->
+                                            <t t-if="req.stage == 'partially_paid'">
+                                                <form method="post"
+                                                      t-attf-action="/my/parts/request/{{req.id}}/partial_pay"
+                                                      class="d-inline">
+                                                    <input type="hidden" name="csrf_token"
+                                                           t-att-value="request.csrf_token()"/>
+                                                    <button type="submit"
+                                                            class="btn btn-warning btn-sm"
+                                                            title="Pay Remaining">
+                                                        Pay Remaining
+                                                    </button>
+                                                </form>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+                <!-- No Results -->
+                <t t-else="">
+                    <div class="alert alert-warning">
+                        <i class="fa fa-info-circle"></i>
+                        You don't have any parts approval requests.
+                    </div>
+                </t>
+            </div>
+        </t>
+    </template>
+    <!-- Add breadcrumb for parts request page -->
+    <template id="parts_request_breadcrumb" inherit_id="portal.portal_breadcrumbs">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'parts_request'" class="breadcrumb-item active">
+                Parts Approval Requests
+            </li>
+        </xpath>
+    </template>
+
+    <template id="ticket_list_view_inherit" inherit_id="customer_app.ticket_list_view" name="Ticket List Inherit">
+
+        <!-- Set company and notifications -->
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]" position="before">
+            <t t-set="company" t-value="request.env.company"/>
+            <t t-set="has_notifications" t-value="bool(notifications_by_task)"/>
+        </xpath>
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]//thead//tr/th[last()]" position="after">
+            <t t-if="has_notifications and company.enable_shipment_to_customer">
+                <th class="sortable">Action
+                    <i class="fa fa-sort ms-1"></i>
+                </th>
+            </t>
+        </xpath>
+        <!-- Add Action Column -->
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]//tbody//tr//td[last()]" position="after">
+            <td>
+                <t t-set="notification" t-value="notifications_by_task.get(call.id)"/>
+
+                <!-- Show one Receive button only if ALL parts are ready for receiving -->
+                <t t-if="notification and call.part_ids and (
+                    all([(company.enable_direct_pickup and company.enable_shipment_to_customer and p.status == 'pick_up')
+                         or (not company.enable_direct_pickup and company.enable_shipment_to_customer and p.status == 'shipment')
+                         or (company.enable_direct_pickup and not company.enable_shipment_to_customer and p.status == 'pick_up')
+                         for p in call.part_ids])
+                )">
+                    <a t-attf-href="/part/receive/all/#{notification.id}" class="btn btn-sm btn-success">
+                        Receive
+                    </a>
+                </t>
+            </td>
+        </xpath>
+    </template>
+
+    <template id="inherit_ticket_form_view_add_part_receive"
+              inherit_id="customer_app.ticket_form_view"
+              name="Ticket Form View - Add Part Receive">
+
+        <!-- Insert safely ABOVE Assignee cards -->
+        <xpath expr="//div[@t-if='ticket.user_ids or ticket.partner_id']" position="before">
+            <t>
+                <t t-set="notification" t-value="notifications_by_task.get(ticket.id)"/>
+                <t t-set="company" t-value="request.env.company"/>
+
+                <!-- Always show Parts button if shipment is enabled (alone or with pickup) -->
+                <t t-if="company.enable_shipment_to_customer or (company.enable_shipment_to_customer and company.enable_direct_pickup)">
+                    <t t-if="notification and ticket.part_ids">
+                        <div class="col-12 mb-3">
+                            <div class="mb-2">
+                                <h6 class="fw-semibold text-dark text-center" style="font-size: 16px; margin: 0;">
+                                    Parts Received
+                                </h6>
+                            </div>
+
+                            <!-- Main button always visible -->
+                            <a href="#" class="text-decoration-none w-100" data-bs-toggle="modal"
+                               data-bs-target="#receivePartModal">
+                                <div class="col-12 mt-3">
+                                    <div class="border rounded-3 p-3 bg-light d-flex align-items-center justify-content-center"
+                                         style="height: 40px; cursor: pointer;">
+                                        <h6 class="m-0 p-0 w-100 d-flex justify-content-center align-items-center">
+                                            <span class="fw-semibold text-dark text-center"
+                                                  style="margin: 2px 0; padding: 2px 0; font-size: 15px;">Parts
+                                            </span>
+                                        </h6>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- Modal -->
+                <div class="modal fade" id="receivePartModal" tabindex="-1" aria-labelledby="receivePartModalLabel"
+                     aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="receivePartModalLabel">Receive Parts</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"/>
+                            </div>
+                            <div class="modal-body">
+                                <t t-if="ticket.part_ids">
+                                    <table class="table table-bordered table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Part Name</th>
+                                                <th>Type</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="ticket.part_ids" t-as="part">
+                                                <tr>
+                                                    <td>
+                                                        <t t-esc="part.product_id.display_name or ''"/>
+                                                    </td>
+                                                    <td>
+                                                        <t t-esc="part.part_service_type or ''"/>
+                                                    </td>
+                                                    <td>
+                                                        <t t-esc="part.status or ''"/>
+                                                    </td>
+                                                    <td>
+                                                        <div class="d-flex gap-2 justify-content-center">
+
+                                                            <t t-if="(company.enable_direct_pickup and company.enable_shipment_to_customer and part.status == 'pick_up')
+                                                                      or (not company.enable_direct_pickup and company.enable_shipment_to_customer and part.status == 'shipment')
+                                                                      or (company.enable_direct_pickup and not company.enable_shipment_to_customer and part.status == 'pick_up')">
+                                                                <form t-att-action="'/part/receive/form/' + str(part.id)"
+                                                                      method="post" class="m-0">
+                                                                    <input type="hidden" name="csrf_token"
+                                                                           t-att-value="request.csrf_token()"/>
+
+                                                                    <button type="submit"
+                                                                            class="btn btn-sm btn-success">
+                                                                        Receive
+                                                                    </button>
+                                                                </form>
+                                                            </t>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </t>
+                                <t t-else="">
+                                    <div class="alert alert-warning text-center">
+                                        No parts found for this ticket.
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </xpath>
+        <!-- Insert AFTER Product field -->
+        <xpath expr="//div[@class='col-12 col-md-6 flex-grow-1']" position="after">
+
+            <!-- Right side column for Parts -->
+            <div class="col-12 col-md-6 flex-grow-1">
+                <t t-if="ticket.part_ids">
+                    <div class="mb-2">
+                        <strong>Parts:</strong>
+                        <ul class="ps-3">
+                            <t t-foreach="ticket.part_ids" t-as="part">
+                                <li>
+                                    <span t-esc="part.product_id.display_name or 'Unnamed Part'"/>
+                                    <t t-if="part.part_service_type">
+                                        (<t t-esc="part.part_service_type"/>)
+                                    </t>
+                                </li>
+                            </t>
+                        </ul>
+                    </div>
+                </t>
+            </div>
+        </xpath>
+
+    </template>
+</odoo>
