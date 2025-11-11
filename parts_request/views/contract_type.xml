@@ -1,0 +1,26 @@
+<odoo>
+
+    <record id="view_product_template_inherit_pending_request" model="ir.ui.view">
+        <field name="name">product.template.inherit.pending.request</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='uom_po_id']" position="after">
+                <field name="payment_required_first" invisible="not is_part"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_contract_type_form_inherit" model="ir.ui.view">
+        <field name="name">contract.type.form.inherit.coverage</field>
+        <field name="model">contract.type</field>
+        <field name="inherit_id" ref="inventory_custom_tracking_installation_delivery.view_contract_type_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="with_parts"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
