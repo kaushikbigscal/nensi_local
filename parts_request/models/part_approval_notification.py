@@ -53,10 +53,6 @@ class PartApprovalNotification(models.Model):
         """Compute visibility for 'Request' button based on coverage and approval/payment flow."""
         for rec in self:
             show = False
-
-            part = rec.part_id
-            task = rec.task_id
-
             # === FOC Flow ===
             if rec.coverage == 'foc':
                 if rec.status == 'approved':
@@ -64,33 +60,12 @@ class PartApprovalNotification(models.Model):
 
             # === CHARGEABLE Flow ===
             elif rec.coverage == 'chargeable':
-                # Initially do not show after salesperson approval
                 if rec.status != 'customer_approved':
                     show = False
-
-                    first_payment_required = getattr(part, 'first_payment_required', False)
-
-                    # Try to get linked sale order
-                    sale_order = getattr(rec, 'sale_order_id', False)
-
-                    if first_payment_required:
-                        if sale_order:
-                            paid_tx = self.env['payment.transaction'].sudo().search([
-                                ('sale_order_ids', 'in', sale_order.ids),
-                                ('state', 'in', ['done', 'authorized'])
-                            ], limit=1)
-
-                            if paid_tx:
-                                show = True
-                            else:
-                                show = False
-                        else:
-                            show = False
-                    else:
-                        show = True
+                else:
+                    show = True
             else:
                 show = False
-
             rec.show_request_button = show
 
     @api.model_create_multi
@@ -127,7 +102,7 @@ class PartApprovalNotification(models.Model):
         if partner:
             domain += ['|', ('picking_id.partner_id', '=', partner.id),
                        ('picking_id.partner_id.commercial_partner_id', '=', partner.commercial_partner_id.id)]
-        move_line = self.env['stock.move.line'].search(domain, limit=1)
+        move_line = self.env['stock.move.line'].search(domain, order='id desc', limit=1)
 
         warehouse = False
         if move_line:
@@ -196,11 +171,11 @@ class PartApprovalNotification(models.Model):
             assignees = (task.user_ids | rec.user_ids).filtered('partner_id')
             if assignees:
                 partner_ids = assignees.mapped('partner_id.id')
-                task.message_notify(
+                rec.message_notify(
                     body=_("Supervisor %s has approved your request for the part %s.") % (self.env.user.name, part_name),
                     subject=_('Assignee Notification - %s') % (task.name or ''),
                     partner_ids=partner_ids,
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
                 _logger.debug('Notified assignees %s for record %s', partner_ids, rec.id)
 
@@ -222,11 +197,11 @@ class PartApprovalNotification(models.Model):
             assignees = (task.user_ids | rec.user_ids).filtered('partner_id')
             if assignees:
                 partner_ids = assignees.mapped('partner_id.id')
-                task.message_notify(
+                rec.message_notify(
                     body=_('Supervisor %s has rejected your request for the part %s.') % (self.env.user.name, part_name),
                     subject=_('Assignee Notification - %s') % (task.name or ''),
                     partner_ids=partner_ids,
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
 
     def _detect_warehouse_for_task(self, task, product):
@@ -237,7 +212,7 @@ class PartApprovalNotification(models.Model):
         domain = [('product_id', '=', product.id)]
         if partner:
             domain += ['|', ('picking_id.partner_id', '=', partner.id), ('picking_id.partner_id.commercial_partner_id', '=', partner.commercial_partner_id.id)]
-        move_line = self.env['stock.move.line'].search(domain, limit=1)
+        move_line = self.env['stock.move.line'].search(domain, order='id desc', limit=1)
         if not move_line:
             return self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=1)
         location = move_line.location_id
@@ -281,7 +256,7 @@ class PartApprovalNotification(models.Model):
                 body=message_body,
                 subject=_('Warehouse Manager Request - %s') % (rec.display_name or ''),
                 partner_ids=[manager_partner_id],
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
             )
 
     def action_part_available(self):
@@ -325,7 +300,7 @@ class PartApprovalNotification(models.Model):
                     body=_('The product %s of the part %s has been marked as available for the task %s by %s.') % (
                         product.display_name, part_name, task.display_name, self.env.user.display_name),
                     partner_ids=partner_ids,
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                     email_layout_xmlid='mail.mail_notification_light',
                 )
 
@@ -365,47 +340,66 @@ class PartApprovalNotification(models.Model):
                         f"The part '{rec.display_name}' has been marked as picked up by {self.env.user.name, part_name}."
                     ),
                     partner_ids=[supervisor_partner.id],
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
 
     def action_redirect_stock(self):
         self.ensure_one()
         if self.env.company.enable_warehouse != 'internal_warehouse':
             return
+
         if not self.product_id:
             raise UserError(_('No product linked with this record.'))
 
-        move_lines = self.env['stock.move.line'].search([('product_id', '=', self.product_id.id)])
+        # Get the latest move line
+        domain = [('product_id', '=', self.product_id.id)]
         if self.partner_id:
-            move_lines = move_lines.filtered(lambda m: m.picking_id.partner_id == self.partner_id)
+            domain.append(('picking_id.partner_id', '=', self.partner_id.id))
 
-        location_ids = move_lines.mapped('location_id.id')
-        # if not location_ids:
-        #     raise UserError(_('No matching stock locations found for this product and partner.'))
-        if not location_ids:
-            # fallback: get main stock location of the company
+        move_line = self.env['stock.move.line'].search(domain, order='id desc', limit=1)
+
+        if move_line:
+            location = move_line.location_id
+            location_id = location.id
+
+            # Step-1: find warehouse for this location
+            warehouse = self.env['stock.warehouse'].search([
+                ('lot_stock_id', 'parent_of', location.id)
+            ], limit=1)
+
+            manager_employee = warehouse.manager
+            manager_user = manager_employee.user_id if manager_employee else False
+
+            if not manager_user or self.env.user.id != manager_user.id:
+                raise AccessError(_('Only the Warehouse Manager (%s) can open the stock.') % (manager_employee.name if manager_employee else 'Not Assigned'))
+
+        else:
+            # fallback: get main stock location
             warehouse = self.env['stock.warehouse'].search([
                 ('company_id', '=', self.env.company.id)
             ], limit=1)
 
             if warehouse and warehouse.lot_stock_id:
-                location_ids = [warehouse.lot_stock_id.id]
+                location = warehouse.lot_stock_id
+                location_id = location.id
             else:
-                raise UserError(_('No stock locations found for this product, partner, or company.'))
+                raise UserError(_('No stock locations found for this product'))
 
+        # Return stock.quant window filtered by our final location
         action = {
             'type': 'ir.actions.act_window',
             'name': 'Stock View (Filtered)',
             'res_model': 'stock.quant',
             'view_mode': 'tree,form',
             'target': 'current',
-            'domain': [('location_id', 'in', location_ids)],
+            'domain': [('location_id', '=', location_id)],
             'context': {
-                'default_location_ids': location_ids,
-                'search_default_location_id': location_ids[0] if len(location_ids) == 1 else False,
+                'default_location_ids': location_id,
+                'search_default_location_id': location_id,
             }
         }
         return action
+
 
 class PartCustomerApprovalNotification(models.Model):
     _name = 'part.customer.approval.notification'
@@ -524,13 +518,13 @@ class PaymentTransactions(models.Model):
                                 ticket.message_notify(
                                     body=message,
                                     subject=_("Partial Payment"),
-                                    subtype_xmlid='mail.mt_comment',
-                                    partner_ids=assignees.mapped('partner_id').ids
+                                    partner_ids=assignees.mapped('partner_id').ids,
+                                    subtype_xmlid='mail.mt_note',
                                 )
                                 ticket.message_post(
                                     body=message,
                                     subject=_("Partial Payment"),
-                                    subtype_xmlid='mail.mt_comment',
+                                    subtype_xmlid='mail.mt_note',
                                 )
                             except Exception as e:
                                 _logger.exception(">>> Failed to send partial payment notification for ticket %s: %s" % (ticket.name, e))
@@ -555,18 +549,18 @@ class PaymentTransactions(models.Model):
                                     parts_notification.message_notify(
                                         body=message,
                                         subject=_("Customer Payment Completed"),
-                                        subtype_xmlid='mail.mt_comment',
-                                        partner_ids=notify_partners.ids
+                                        partner_ids=notify_partners.ids,
+                                        subtype_xmlid='mail.mt_note',
                                     )
                                     ticket.message_post(
                                         body=message,
                                         subject=_("Customer Payment Completed"),
-                                        subtype_xmlid='mail.mt_comment',
+                                        subtype_xmlid='mail.mt_note',
                                     )
                                     parts_notification.message_post(
                                         body=message,
                                         subject=_("Customer Payment Completed"),
-                                        subtype_xmlid='mail.mt_comment',
+                                        subtype_xmlid='mail.mt_note',
                                     )
                             except Exception as e:
                                 _logger.exception(">>> Failed to send full payment notification for ticket %s: %s" % (ticket.name, e))
