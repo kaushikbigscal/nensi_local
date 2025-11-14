@@ -1,48 +1,45 @@
-from odoo import http
+from odoo import http, _
 from odoo.http import request
 from odoo.addons.customer_app.controllers.portal import PortalHomePage
 from odoo.tools import format_date
-from odoo import _
 import logging
 
 _logger = logging.getLogger(__name__)
 
-from ..utils import is_fsm_installed
-
 
 class PortalHomeWithPartsRequest(PortalHomePage):
 
-    @http.route(['/my/home', '/my'], type='http', auth="user", website=True)
-    def portal_my_home(self, **kwargs):
-        response = super().portal_my_home(**kwargs)
-
-        if hasattr(response, 'qcontext'):
-            values = response.qcontext
-        else:
-            values = {}
-
-        partner = request.env.user.partner_id
-        parts_request_count = 0
-        parts_request_pending_count = 0
-
-        if 'part.customer.approval.notification' in request.env.registry.models:
-            all_records = request.env['part.customer.approval.notification'].sudo().search([
-                ('task_id.partner_id', '=', partner.id),
-                ('coverage', '=', 'chargeable')
-            ])
-            parts_request_count = len(all_records)
-
-            pending_records = request.env['part.customer.approval.notification'].sudo().search([
-                ('task_id.partner_id', '=', partner.id),
-                ('coverage', '=', 'chargeable'),
-                ('stage', '=', 'pending')
-            ])
-            parts_request_pending_count = len(pending_records)
-
-        values['parts_request_count'] = parts_request_count
-        values['parts_request_pending_count'] = parts_request_pending_count
-
-        return request.render("portal.portal_my_home", values)
+    # @http.route(['/my/home', '/my'], type='http', auth="user", website=True)
+    # def portal_my_home(self, **kwargs):
+    #     response = super().portal_my_home(**kwargs)
+    #
+    #     if hasattr(response, 'qcontext'):
+    #         values = response.qcontext
+    #     else:
+    #         values = {}
+    #
+    #     partner = request.env.user.partner_id
+    #     parts_request_count = 0
+    #     parts_request_pending_count = 0
+    #
+    #     if 'part.customer.approval.notification' in request.env.registry.models:
+    #         all_records = request.env['part.customer.approval.notification'].sudo().search([
+    #             ('task_id.partner_id', '=', partner.id),
+    #             ('coverage', '=', 'chargeable')
+    #         ])
+    #         parts_request_count = len(all_records)
+    #
+    #         pending_records = request.env['part.customer.approval.notification'].sudo().search([
+    #             ('task_id.partner_id', '=', partner.id),
+    #             ('coverage', '=', 'chargeable'),
+    #             ('stage', '=', 'pending')
+    #         ])
+    #         parts_request_pending_count = len(pending_records)
+    #
+    #     values['parts_request_count'] = parts_request_count
+    #     values['parts_request_pending_count'] = parts_request_pending_count
+    #
+    #     return request.render("portal.portal_my_home", values)
 
     @http.route('/my/parts/request', type='http', auth="user", website=True)
     def portal_my_parts_request(self, sortby='newest', filterby='all', groupby='', search='', **kwargs):
@@ -78,6 +75,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
             'pending': {'label': 'Pending', 'domain': [('stage', '=', 'pending')]},
             'approved': {'label': 'Approved', 'domain': [('stage', '=', 'approved')]},
             'rejected': {'label': 'Rejected', 'domain': [('stage', '=', 'rejected')]},
+            'partially_paid': {'label': 'Partially Paid', 'domain': [('stage', '=', 'partially_paid')]},
         }
 
         # Apply filter
@@ -192,6 +190,39 @@ class PortalHomeWithPartsRequest(PortalHomePage):
                 notifications_by_task = {n.task_id.id: n for n in notifications}
                 qcontext['notifications_by_task'] = notifications_by_task
 
+            # Finally, return updated response
+            return response
+
+        return response
+
+    @http.route(['/my/open/ticket'], type='http', auth='user', website=True)
+    def list_open_tickets(self, sortby='recent', filterby='all', groupby='', search='', **kwargs):
+
+        # Get the original render result
+        response = PortalHomePage().list_open_tickets(sortby, filterby, groupby, search, **kwargs)
+
+        # We can access the rendering context via qcontext if it's a TemplateResponse
+        if hasattr(response, 'qcontext'):
+            qcontext = response.qcontext
+
+            calls = qcontext.get('calls')
+            if calls:
+                notification_model = request.env['part.approval.notification'].sudo()
+                notifications = notification_model.search([('task_id', 'in', calls.ids)])
+
+                for n in notifications:
+                    part_display = 'N/A'
+                    if hasattr(n, 'part_id') and n.part_id:
+                        part_display = getattr(n.part_id, 'part_name', False) or \
+                                       (getattr(n.part_id, 'product_id', False)
+                                        and n.part_id.product_id.display_name) or \
+                                       'Unknown Part'
+
+                # Create task-notification mapping
+                notifications_by_task = {n.task_id.id: n for n in notifications}
+                qcontext['notifications_by_task'] = notifications_by_task
+
+            # Finally, return updated response
             return response
 
         return response
@@ -209,7 +240,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
             if ticket:
                 notification_model = request.env['part.approval.notification'].sudo()
                 notifications = notification_model.search([('task_id', '=', ticket.id)])
-
+                
                 for n in notifications:
                     part_display = 'N/A'
                     if hasattr(n, 'part_id') and n.part_id:
@@ -222,6 +253,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
                 notifications_by_task = {n.task_id.id: n for n in notifications}
                 qcontext['notifications_by_task'] = notifications_by_task
 
+            # Finally, return updated response
             return response
         return response
 
@@ -266,7 +298,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
                 subject=f"Customer Received - {task.name}",
                 body=message_body,
                 partner_ids=[supervisor_user.partner_id.id],
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
             )
 
         # Redirect back smartly
@@ -321,17 +353,17 @@ class PortalHomeWithPartsRequest(PortalHomePage):
                     body=_("Part %s for ticket %s has been marked as Received by %s.")
                         % (part_name, task.name, task.partner_id.name),
                     partner_ids=partner_ids,
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
                 notification.message_post(
                     subject=f"Customer Received - {task.name} ({part_name})",
                     body=_("Part %s for ticket %s has been marked as Received by %s.")
                          % (part_name, task.name, task.partner_id.name),
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
                 )
 
         return request.redirect(request.httprequest.referrer or '/my/view')
- 
+
     @http.route('/my/parts/request/<int:request_id>/approve', type='http', auth="user", website=True, methods=['POST'],
                 csrf=True)
     def parts_request_approve(self, request_id, **kwargs):
@@ -410,12 +442,16 @@ class PortalHomeWithPartsRequest(PortalHomePage):
             message = _(
                 "Customer %s has rejected a parts request for part '%s'."
             ) % (partner.name, part_name)
-            task.message_post(
+            task.message_notify(
                 body=message,
                 subject="Customer Rejected",
                 partner_ids=task.user_ids.mapped('partner_id').ids,
-                message_type='notification',
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
+            )
+            task.message_post(
+                body=message,
+                subject="Customer Rejected",
+                subtype_xmlid='mail.mt_note',
             )
 
         # Cancel quotation
@@ -468,7 +504,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
         if not request_rec.exists():
             return request.redirect('/my/parts/requests')
 
-        # Get the sale order linked to the same ticket and part
+        # Step 1: Get the sale order linked to the same ticket and part
         sale_order = request.env['sale.order'].sudo().search([
             ('ticket_id', '=', request_rec.task_id.id),
             ('part_id', '=', request_rec.part_id.id)
@@ -477,20 +513,19 @@ class PortalHomeWithPartsRequest(PortalHomePage):
         if not sale_order:
             return request.redirect('/my/parts/requests')
 
-
-        # Find the posted (open) invoice linked to this sale order
+        # Step 2: Find the posted (open) invoice linked to this sale order
         invoices = sale_order.invoice_ids.filtered(lambda i: i.state == 'posted')
 
         for inv in invoices:
             inv._compute_amount()
 
-            # If invoice has remaining balance, redirect to it
+            # Step 3: If invoice has remaining balance, redirect to it
             if inv.amount_residual > 0:
                 inv._portal_ensure_token()
                 url = f"/my/invoices/{inv.id}?access_token={inv.access_token}"
                 return request.redirect(url)
 
-        # Fallback — if no open invoice, go to the quotation directly
+        # Step 4: Fallback — if no open invoice, go to the quotation directly
         order_url = sale_order.get_portal_url() or '/my/orders'
         return request.redirect(order_url)
 
@@ -504,7 +539,7 @@ class PaymentRedirectController(http.Controller):
         if not tx:
             return request.redirect('/my')
 
-        # --- Let Odoo finalize post-processing (this reconciles the payment) ---
+        # ---finalize post-processing (this reconciles the payment) ---
         try:
             tx._finalize_post_processing()
         except Exception as e:
@@ -513,9 +548,7 @@ class PaymentRedirectController(http.Controller):
         # --- CASE 1: Sale Order ---
         if tx.sale_order_ids:
             for order in tx.sale_order_ids:
-
                 invoices = order.invoice_ids
-
                 remaining = invoices.filtered(lambda inv: inv.amount_residual > 0)
                 if remaining:
                     inv = remaining[0]
@@ -523,7 +556,7 @@ class PaymentRedirectController(http.Controller):
 
                 return request.redirect(f"/my/orders/{order.id}?access_token={order.access_token}")
 
-        # --- Direct Invoice ---
+        # --- CASE 2: Direct Invoice ---
         elif tx.invoice_ids:
 
             for inv in tx.invoice_ids:
@@ -573,13 +606,14 @@ class PaymentRedirectController(http.Controller):
         if not task:
             return
 
+
         # Notify payment info
         paid_amount = invoice.amount_total - invoice.amount_residual
         task.message_post(
             # body=f"Customer paid {paid_amount} / {invoice.amount_total} for {invoice.name}.",
             body=f"Customer has fully paid for ticket {task.name}. Part {part_name} is now approved.",
             subject="Customer Payment Update",
-            subtype_xmlid='mail.mt_comment',
+            subtype_xmlid='mail.mt_note',
         )
 
         # Handle full or partial
@@ -601,19 +635,19 @@ class PaymentRedirectController(http.Controller):
                 partner_ids.append(task.department_id.manager_id.user_id.partner_id.id)
 
             parts_notification.message_notify(
-                body=f"Customerededed has fully paid for ticket {task.name}. Part {part_name} is now approved.",
+                body=f"Customer has fully paid for ticket {task.name}. Part {part_name} is now approved.",
                 subject="Full Payment Completed",
-                subtype_xmlid='mail.mt_comment',
                 partner_ids=partner_ids,
+                subtype_xmlid='mail.mt_note',
             )
             parts_notification.message_post(
                 body=f"Customer has fully paid for ticket {task.name}. Part {part_name} is now approved.",
                 subject="Full Payment Completed",
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
             )
         else:
             task.message_post(
                 body=f"Partial payment received for {invoice.name}. Remaining {invoice.amount_residual}.",
                 subject="Partial Payment",
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
             )
