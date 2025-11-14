@@ -126,6 +126,7 @@ class PortalHomeWithPartsRequest(PortalHomePage):
             },
             'searchbar_combined': combined_options,
             'default_url': '/my/parts/request',
+            'format_date': lambda date: format_date(request.env, date, date_format='dd/MM/yyyy') if date else 'N/A',
         }
         return request.render("parts_request.parts_request_list_view", values)
 
