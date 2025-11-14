@@ -30,11 +30,11 @@
                 <field name="task_id"/>
                 <field name="user_ids" widget="many2many_avatar_user"/>
                 <field name="partner_id" widget="many2one_avatar_user"/>
-                <field name="product_id" widget="text"/>
+                <field name="product_id"/>
                 <field name="part_name"/>
                 <field name="coverage" decoration-success="coverage == 'foc'"
                        decoration-danger="coverage == 'chargeable'"/>
-                <field name="supervisor_id" widget="text"/>
+                <field name="supervisor_id" />
                 <field name="status"/>
                 <button name="action_approve" string="Approve" type="object" class="btn-success"
                         invisible="status != 'draft'"/>
@@ -84,6 +84,7 @@
                             icon="fa-truck"
                             invisible="not show_pick_up_button"
                     />
+
                     <field name="status"
                            widget="statusbar"
                            statusbar_visible="draft,approved,waiting_warehouse_manager,shipment,pick_up,received,rejected"/>
@@ -99,11 +100,11 @@
                         <field name="task_id"/>
                         <field name="user_ids" widget="many2many_avatar_user"/>
                         <field name="partner_id" widget="many2one_avatar_user"/>
-                        <field name="product_id" widget="text"/>
+                        <field name="product_id" options="{ 'no_open': True }"/>
                         <field name="part_name"/>
                         <field name="coverage" decoration-success="coverage == 'foc'"
                                decoration-danger="coverage == 'chargeable'"/>
-                        <field name="supervisor_id" widget="text"/>
+                        <field name="supervisor_id" options="{ 'no_open': True }" />
                     </group>
                 </sheet>
                 <div class="oe_chatter">
