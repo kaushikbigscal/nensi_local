@@ -11,6 +11,7 @@ class SaleOrder(models.Model):
 
     ticket_id = fields.Many2one('project.task', string='Related Ticket', readonly=True, ondelete='set null')
     part_id = fields.Many2one('project.task.part', string="Related Part", ondelete='cascade')
+    is_part_quotation = fields.Boolean(string="Is Part Quotation", default=False)
 
 
     def write(self, vals):
@@ -31,7 +32,6 @@ class SaleOrder(models.Model):
                 part = order.part_id
                 task = part.task_id
                 part_name = part.product_id.display_name if part.product_id else (part.description or "Unknown Part")
-
                 notif = self.env['part.customer.approval.notification'].sudo().search([
                     ('part_id', '=', part.id),
                     ('task_id', '=', task.id),
@@ -77,7 +77,6 @@ class SaleOrder(models.Model):
 
         return res
 
-
 class ProjectTask(models.Model):
     _inherit = 'project.task'
 
@@ -97,7 +96,6 @@ class ProjectTask(models.Model):
 
             # Check if ANY linked part has approval requested = True
             has_requested_parts = any(task.part_ids.filtered(lambda p: p.approval_requested))
-
             # Skip validation if no part has approval_requested
             if not has_requested_parts:
                 continue
@@ -118,6 +116,7 @@ class ProjectTask(models.Model):
             self._check_part_status_before_stage_change(new_stage.name)
         return super(ProjectTask, self).write(vals)
 
+
     def unlink(self):
         for task in self:
             self.env['part.approval.notification'].search([('task_id', '=', task.id)]).unlink()
@@ -128,6 +127,80 @@ class ProjectTask(models.Model):
             if quotations:
                 quotations.sudo().unlink()
         return super(ProjectTask, self).unlink()
+
+
+    quotation_count = fields.Integer(
+        string='Quotation Count',
+        compute='_compute_quotation_count',
+        store=False
+    )
+
+    @api.depends('part_ids')
+    def _compute_quotation_count(self):
+        for task in self:
+            if not task.part_ids:
+                task.quotation_count = 0
+                continue
+            quotations = self.env['sale.order'].sudo().search([
+                ('part_id', 'in', task.part_ids.ids)
+            ])
+            task.quotation_count = len(quotations)
+
+    fsm_invoice_count = fields.Integer(
+        string='Invoice Count',
+        compute='_compute_invoice_count',
+        store=False
+    )
+
+    @api.depends('part_ids', 'part_ids.sale_order_ids', 'part_ids.sale_order_ids.invoice_ids')
+    def _compute_invoice_count(self):
+        for task in self:
+            quotations = self.env['sale.order'].sudo().search([
+                ('part_id', 'in', task.part_ids.ids)
+            ])
+            invoices = self.env['account.move'].sudo().search([
+                ('invoice_origin', 'in', quotations.mapped('name')),
+                ('move_type', '=', 'out_invoice')
+            ])
+            task.fsm_invoice_count = len(invoices)
+
+    def action_open_quotation(self):
+        """Open all quotations linked to this task's parts"""
+        self.ensure_one()
+        quotations = self.env['sale.order'].sudo().search([
+            ('part_id', 'in', self.part_ids.ids)
+        ])
+        return {
+            'name': _('Task Quotations'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'tree,form',
+            'domain': [('id', 'in', quotations.ids)],
+            'target': 'current',
+            'context': {'create': False},
+        }
+
+    def action_open_invoice(self):
+        """Open all invoices linked to this task's parts"""
+        self.ensure_one()
+
+        quotations = self.env['sale.order'].sudo().search([
+            ('part_id', 'in', self.part_ids.ids)
+        ])
+        invoices = self.env['account.move'].search([
+            ('invoice_origin', 'in', quotations.mapped('name')),
+            ('move_type', '=', 'out_invoice')
+        ])
+
+        return {
+            'name': _('Task Invoices'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'account.move',
+            'view_mode': 'tree,form',
+            'domain': [('id', 'in', invoices.ids)],
+            'target': 'current',
+            'context': {'create': False},
+        }
 
 class PartServiceWizard(models.TransientModel):
     _inherit = 'part.service.wizard'
@@ -153,8 +226,6 @@ class PartServiceWizard(models.TransientModel):
                 res['part_service_type'] = part.part_service_type
             if 'amount' in fields_list:
                 res['amount'] = part.amount
-            # if 'stage' in fields_list:
-            #     res['stage'] = part.stage or 'draft'
         return res
 
     def apply_service_update(self):
@@ -166,7 +237,6 @@ class PartServiceWizard(models.TransientModel):
             'description': self.description,
             'coverage': self.coverage,
             'amount': self.amount,
-            # 'stage': self.stage,
         })
 
 
@@ -184,7 +254,8 @@ class ProjectTaskPart(models.Model):
         store=True,
         readonly=False
     )
-    
+    sale_order_ids = fields.One2many('sale.order', 'part_id', string="Sale Orders")
+
     status = fields.Selection([
         ('draft', 'Draft'),
         ('approved', 'Approved'),
@@ -280,10 +351,10 @@ class ProjectTaskPart(models.Model):
                         coverage = 'chargeable'
 
                 elif mapping.status != 'chargeable':
-                    coverage = 'foc'
+                        coverage = 'foc'
 
             rec.coverage = coverage
-            
+
     def unlink(self):
         for part in self:
             self.env['part.approval.notification'].search([('part_id', '=', part.id)]).unlink()
@@ -299,6 +370,8 @@ class ProjectTaskPart(models.Model):
     def action_parts_request(self):
         """Send notification only to the department manager using message_post"""
         for part in self:
+            if not part.part_service_type:
+                raise UserError(_("Please select the Part Service Type before requesting."))
             part.approval_requested = True
 
             task = part.task_id
@@ -313,8 +386,6 @@ class ProjectTaskPart(models.Model):
             # Prepare message
             part_name = part.product_id.display_name if part.product_id else 'Unknown Part'
             customer = task.partner_id
-            # message = _("Part '%s' requires your approval.") % part_name
-
             product_name = (
                 task.customer_product_id.product_id.display_name
                 if task.customer_product_id and task.customer_product_id.product_id
@@ -343,7 +414,7 @@ class ProjectTaskPart(models.Model):
                 body=f"The part '{part_name}' of product '{product_name}' is send approval for Task '{task.name}'.",
                 subject=_("Part Approval Request"),
                 partner_ids=[supervisor.user_id.partner_id.id],
-                subtype_xmlid='mail.mt_comment',
+                subtype_xmlid='mail.mt_note',
             )
             task.message_post(
                 body=f"The part '{part_name}' of product '{product_name}' is send approval for Task '{task.name}'.",
@@ -381,7 +452,6 @@ class ProjectTaskPart(models.Model):
                 else 'No Product'
             )
 
-
             # Find any existing quotation for this task
             quotation = self.env['sale.order'].sudo().search([
                 ('ticket_id', '=', task.id),
@@ -399,11 +469,11 @@ class ProjectTaskPart(models.Model):
                     'target': 'current',
                 }
 
-
-            #  --- Create Ticket Quotation Automatically ---
+            # Create Ticket Quotation Automatically ---
             quotation = self._create_ticket_quotation(task, part)
+            quotation.is_part_quotation = True
+            print("is_part_quotation true")
 
-        # return True
         return {
             'type': 'ir.actions.act_window',
             'name': 'Quotation',
@@ -430,7 +500,7 @@ class ProjectTaskPart(models.Model):
                 if task.customer_product_id and task.customer_product_id.product_id
                 else 'No Product'
             )
-
+            
             # Find any existing quotation for this task
             quotation = self.env['sale.order'].sudo().search([
                 ('ticket_id', '=', task.id),
@@ -447,7 +517,6 @@ class ProjectTaskPart(models.Model):
                     'res_id': quotation.id,
                     'target': 'current',
                 }
-                
         return {
             'type': 'ir.actions.act_window',
             'name': 'Quotation',
