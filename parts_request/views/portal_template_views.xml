@@ -1,34 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <template id="custom_portal_parts_request_card" inherit_id="customer_app.custom_portal_layout_cards">
-        <xpath expr="//div[contains(@class, 'info-card-grid')]//a[@t-attf-href='/my/quotes']/.." position="before">
-            <t t-if="fsm_installed">
-                <!-- Parts Request Card -->
-                <a href="/my/parts/request" class="text-decoration-none">
-                    <div class="info-card">
-                        <div class="info-card-title">Parts Request</div>
-
-                        <!-- Count -->
-                        <div class="info-card-value">
-                            <t t-esc="parts_request_count or 0"/>
-                        </div>
-                        <div class="info-icon">
-                            <i class="bi bi-folder-symlink"></i>
-                        </div>
-
-                        <!-- Status -->
-                        <div t-attf-class="info-card-status #{'info-green' if parts_request_pending_count == 0 else 'info-red'}">
-                            <t t-if="parts_request_pending_count == 0">No Pending Requests</t>
-                            <t t-else="">
-                                <t t-esc="parts_request_pending_count or 0"/>
-                                Pending
-                            </t>
-                        </div>
-                    </div>
-                </a>
-            </t>
-        </xpath>
-    </template>
+    
     <!-- Parts Request List View Template -->
     <template id="parts_request_list_view" name="Parts Request List">
         <t t-call="portal.portal_layout">
@@ -108,8 +80,6 @@
                                                             <td class="wrap-text">
                                                                 <t t-esc="req.product_id.name or 'N/A'"/>
                                                             </td>
-
-                                                            <!-- Part Name -->
                                                             <td class="wrap-text">
                                                                 <t t-if="req.part_name or req.part_id.name">
                                                                     <t t-esc="req.part_name or req.part_id.name"/>
@@ -126,12 +96,9 @@
                                                             </td>
                                                             <!-- Status -->
                                                             <td>
-                                                                <span t-attf-class="badge #{
-                                                                                    'bg-warning text-dark' if req.stage == 'pending' else
-                                                                                    'bg-success' if req.stage == 'approved' else
-                                                                                    'bg-danger' if req.stage == 'rejected' else
-                                                                                    'bg-secondary' }">
-                                                                    <t t-esc="req.stage.title() or 'N/A'"/>
+                                                                <span class="badge">
+                                                                    <!-- <t t-esc="req.stage.title() or 'N/A'"/>-->
+                                                                    <t t-esc="dict(req._fields['stage'].selection).get(req.stage)"/>
                                                                 </span>
                                                             </td>
                                                             <!-- Amount Column - FIXED -->
@@ -264,7 +231,8 @@
                                             <t t-if="req.part_name or req.part_id.name">
                                                 <t t-esc="req.part_name or req.part_id.name"/>
                                                 <t t-if="req.part_id.part_service_type">
-                                                    (<t t-esc="req.part_id.part_service_type"/>)
+<!--                                                    (<t t-esc="req.part_id.part_service_type"/>)-->
+                                                        (<t t-esc="dict(req.part_id._fields['part_service_type'].selection).get(req.part_id.part_service_type)"/>)
                                                 </t>
                                             </t>
                                             <t t-else="1">N/A</t>
@@ -277,13 +245,9 @@
                                         </td>
                                         <!-- Status -->
                                         <td>
-                                            <span t-attf-class="badge #{
-                                            'bg-warning text-dark' if req.stage == 'pending' else
-                                            'bg-success' if req.stage == 'approved' else
-                                            'bg-danger' if req.stage == 'rejected' else
-                                            'bg-secondary'
-                                        }">
-                                                <t t-esc="req.stage.title() or 'N/A'"/>
+                                            <span class="badge">
+<!--                                                <t t-esc="req.stage.title() or 'N/A'"/>-->
+                                                <t t-esc="dict(req._fields['stage'].selection).get(req.stage)"/>
                                             </span>
                                         </td>
                                         <!-- Amount Column - FIXED -->
@@ -372,6 +336,7 @@
             </div>
         </t>
     </template>
+
     <!-- Add breadcrumb for parts request page -->
     <template id="parts_request_breadcrumb" inherit_id="portal.portal_breadcrumbs">
         <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
@@ -382,6 +347,40 @@
     </template>
 
     <template id="ticket_list_view_inherit" inherit_id="customer_app.ticket_list_view" name="Ticket List Inherit">
+
+        <!-- Set company and notifications -->
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]" position="before">
+            <t t-set="company" t-value="request.env.company"/>
+            <t t-set="has_notifications" t-value="bool(notifications_by_task)"/>
+        </xpath>
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]//thead//tr/th[last()]" position="after">
+            <t t-if="has_notifications and company.enable_shipment_to_customer">
+                <th class="sortable">Action
+                    <i class="fa fa-sort ms-1"></i>
+                </th>
+            </t>
+        </xpath>
+        <!-- Add Action Column -->
+        <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]//tbody//tr//td[last()]" position="after">
+            <td>
+                <t t-set="notification" t-value="notifications_by_task.get(call.id)"/>
+
+                <!-- Show one Receive button only if ALL parts are ready for receiving -->
+                <t t-if="notification and call.part_ids and (
+                    all([(company.enable_direct_pickup and company.enable_shipment_to_customer and p.status == 'pick_up')
+                         or (not company.enable_direct_pickup and company.enable_shipment_to_customer and p.status == 'shipment')
+                         or (company.enable_direct_pickup and not company.enable_shipment_to_customer and p.status == 'pick_up')
+                         for p in call.part_ids])
+                )">
+                    <a t-attf-href="/part/receive/all/#{notification.id}" class="btn btn-sm btn-success">
+                        Receive
+                    </a>
+                </t>
+            </td>
+        </xpath>
+    </template>
+
+    <template id="open_ticket_list_view_inherit" inherit_id="customer_app.open_ticket_list_view" name="Open Ticket List">
 
         <!-- Set company and notifications -->
         <xpath expr="//table[contains(@class, 'o_portal_my_doc_table')]" position="before">
@@ -431,7 +430,7 @@
                         <div class="col-12 mb-3">
                             <div class="mb-2">
                                 <h6 class="fw-semibold text-dark text-center" style="font-size: 16px; margin: 0;">
-                                    Parts Received
+                                    Parts Details
                                 </h6>
                             </div>
 
@@ -480,13 +479,18 @@
                                                         <t t-esc="part.product_id.display_name or ''"/>
                                                     </td>
                                                     <td>
-                                                        <t t-esc="part.part_service_type or ''"/>
+<!--                                                        <t t-esc="part.part_service_type or ''"/>-->
+                                                        <t t-esc="dict(part._fields['part_service_type'].selection).get(part.part_service_type) or '' "/>
                                                     </td>
+<!--                                                    <td>-->
+<!--                                                        <t t-esc="part.status or ''"/>-->
+<!--                                                    </td>-->
                                                     <td>
-                                                        <t t-esc="part.status or ''"/>
+                                                        <t t-esc="dict(part._fields['status'].selection).get(part.status)"/>
                                                     </td>
                                                     <td>
                                                         <div class="d-flex gap-2 justify-content-center">
+                                                            <!-- Receive button conditions -->
 
                                                             <t t-if="(company.enable_direct_pickup and company.enable_shipment_to_customer and part.status == 'pick_up')
                                                                       or (not company.enable_direct_pickup and company.enable_shipment_to_customer and part.status == 'shipment')
@@ -533,7 +537,7 @@
                                 <li>
                                     <span t-esc="part.product_id.display_name or 'Unnamed Part'"/>
                                     <t t-if="part.part_service_type">
-                                        (<t t-esc="part.part_service_type"/>)
+                                        (<t t-esc="dict(part._fields['part_service_type'].selection).get(part.part_service_type)"/>)
                                     </t>
                                 </li>
                             </t>
@@ -542,6 +546,5 @@
                 </t>
             </div>
         </xpath>
-
     </template>
 </odoo>
