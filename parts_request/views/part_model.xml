@@ -15,7 +15,6 @@
         <field name="model">project.task</field>
         <field name="inherit_id" ref="project.view_task_form2"/>
         <field name="arch" type="xml">
-
             <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='description']"
                    position="after">
                 <field name="coverage"
@@ -27,6 +26,10 @@
             <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='description']"
                    position="attributes">
                 <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='product_id']"
+                   position="attributes">
+                <attribute name="required">1</attribute>
             </xpath>
             <xpath expr="//page[@name='parts_list']/field[@name='task_part_ids']/tree/field[@name='last_update_date_time']"
                    position="attributes">
@@ -58,5 +61,48 @@
             </xpath>
         </field>
     </record>
+    <record id="view_order_form_inherit_hide_confirm_flag" model="ir.ui.view">
+        <field name="name">sale.order.form.hide.confirm.by.flag</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="is_part_quotation" invisible="1"/>
+            </xpath>
+            <xpath expr="//header/button[@name='action_confirm']" position="attributes">
+                <attribute name="invisible">state != 'sent' or is_part_quotation</attribute>
+            </xpath>
+            <xpath expr="//header/button[@name='action_confirm' and not(@id)]" position="attributes">
+                <attribute name="invisible">state != 'draft' or is_part_quotation</attribute>
+            </xpath>
+        </field>
+    </record>
+    <record id="view_task_form2_inherit_invoice_quote" model="ir.ui.view">
+        <field name="name">view.task.form2.inherit.invoice.quote</field>
+        <field name="model">project.task</field>
+        <field name="inherit_id" ref="industry_fsm.view_task_form2_inherit"/>
+        <field name="arch" type="xml">
 
+            <!-- Add buttons after "action_view_customer_complaint_log" -->
+            <xpath expr="//button[@name='action_view_customer_complaint_log']" position="after">
+                <button name="action_open_quotation"
+                        type="object"
+                        class="oe_stat_button"
+                        string="Quotation"
+                        icon="fa-shopping-cart"
+                        invisible="not is_fsm">
+                    <field name="quotation_count" widget="statinfo" string="Quotations"/>
+                </button>
+                <button name="action_open_invoice"
+                        type="object"
+                        class="oe_stat_button"
+                        string="Invoice"
+                        icon="fa-fw fa-pencil-square"
+                        invisible="not is_fsm">
+                    <field name="fsm_invoice_count" widget="statinfo" string="Invoices"/>
+                </button>
+            </xpath>
+
+        </field>
+    </record>
 </odoo>
