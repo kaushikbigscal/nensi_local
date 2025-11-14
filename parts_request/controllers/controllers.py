@@ -6,41 +6,8 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-
 class PortalHomeWithPartsRequest(PortalHomePage):
-
-    # @http.route(['/my/home', '/my'], type='http', auth="user", website=True)
-    # def portal_my_home(self, **kwargs):
-    #     response = super().portal_my_home(**kwargs)
-    #
-    #     if hasattr(response, 'qcontext'):
-    #         values = response.qcontext
-    #     else:
-    #         values = {}
-    #
-    #     partner = request.env.user.partner_id
-    #     parts_request_count = 0
-    #     parts_request_pending_count = 0
-    #
-    #     if 'part.customer.approval.notification' in request.env.registry.models:
-    #         all_records = request.env['part.customer.approval.notification'].sudo().search([
-    #             ('task_id.partner_id', '=', partner.id),
-    #             ('coverage', '=', 'chargeable')
-    #         ])
-    #         parts_request_count = len(all_records)
-    #
-    #         pending_records = request.env['part.customer.approval.notification'].sudo().search([
-    #             ('task_id.partner_id', '=', partner.id),
-    #             ('coverage', '=', 'chargeable'),
-    #             ('stage', '=', 'pending')
-    #         ])
-    #         parts_request_pending_count = len(pending_records)
-    #
-    #     values['parts_request_count'] = parts_request_count
-    #     values['parts_request_pending_count'] = parts_request_pending_count
-    #
-    #     return request.render("portal.portal_my_home", values)
-
+    
     @http.route('/my/parts/request', type='http', auth="user", website=True)
     def portal_my_parts_request(self, sortby='newest', filterby='all', groupby='', search='', **kwargs):
         """Parts Request List View with sorting, filtering and grouping"""
